@@ -1,0 +1,92 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    # Evita bots y evita solaparse con el flujo manual de claude.yml (que ya
+    # actúa cuando el título/cuerpo del issue menciona @claude).
+    if: |
+      github.event.issue.user.type != 'Bot' &&
+      !contains(github.event.issue.title, '@claude') &&
+      !contains(github.event.issue.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Triage issue with Claude
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          prompt: |
+            Analiza el issue #${{ github.event.issue.number }} de este repositorio
+            (título y cuerpo) y realiza el triage siguiendo estos pasos:
+
+            1. Lee el issue con `gh issue view ${{ github.event.issue.number }}`.
+               Consulta también el código relevante del repo (`game.js`,
+               `index.html`, `style.css`, `CLAUDE.md`) si ayuda a entender el
+               problema descrito.
+
+            2. Ejecuta `gh label list` para ver los labels existentes y
+               reutilízalos siempre que encajen (p.ej. `bug`, `enhancement`,
+               `documentation`, `question`, `duplicate`, `invalid`,
+               `wontfix`, `help wanted`, `good first issue`). Solo si ninguno
+               encaja, crea un label nuevo con
+               `gh label create "<nombre>" --description "<desc>" --color "<hex>"`
+               (por ejemplo `priority/high`, `area/rendering`, `area/input`,
+               `area/scoring`). No crees labels duplicados o casi idénticos a
+               uno existente.
+
+            3. Aplica los labels apropiados al issue con
+               `gh issue edit ${{ github.event.issue.number }} --add-label "<label1>,<label2>"`.
+
+            4. Publica (o actualiza) UN comentario de diagnóstico en español.
+               Antes de comentar, revisa los comentarios existentes con
+               `gh issue view ${{ github.event.issue.number }} --comments`: si
+               ya existe un comentario de diagnóstico previo escrito por
+               Claude (identificable por el encabezado "## Diagnóstico
+               automático"), edítalo con
+               `gh issue comment ${{ github.event.issue.number }} --edit-last`
+               en vez de crear uno nuevo. Si no existe, créalo con
+               `gh issue comment ${{ github.event.issue.number }} --body "..."`.
+
+               El comentario debe tener el formato:
+
+               ## Diagnóstico automático
+
+               **Resumen:** <1-2 frases del problema>
+
+               **Tipo:** <bug / mejora / pregunta / duplicado / no válido / otro>
+
+               **Componentes probablemente afectados:** <archivos/funciones de
+               game.js, index.html o style.css relevantes, según la
+               arquitectura descrita en CLAUDE.md>
+
+               **Causa raíz probable:** <hipótesis razonada, o "No hay
+               suficiente información" si el issue es ambiguo>
+
+               **Recomendación para la solución:** <enfoque general sugerido
+               para implementar el fix o la mejora, sin escribir código>
+
+               Si falta información para diagnosticar con confianza, dilo
+               explícitamente en el comentario y pide los detalles que faltan.
+
+            No hagas cambios de código ni abras pull requests: esta tarea es
+            solo de triage (labels + diagnóstico).
+
+          claude_args: |
+            --allowed-tools "Bash(gh label list:*),Bash(gh label create:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Read,Grep,Glob"
