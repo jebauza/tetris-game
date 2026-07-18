@@ -64,6 +64,11 @@ jobs:
                en vez de crear uno nuevo. Si no existe, créalo con
                `gh issue comment ${{ github.event.issue.number }} --body "..."`.
 
+               El comentario debe estar escrito en formato Markdown válido y
+               bien interpretable por GitHub (encabezados con `##`, negritas
+               con `**texto**`, listas con `-`, bloques de código con triple
+               backtick cuando corresponda, etc.).
+
                El comentario debe tener el formato:
 
                ## Diagnóstico automático
